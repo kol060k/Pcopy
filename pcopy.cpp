@@ -8,6 +8,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <fstream>
 
 using namespace std;
 
@@ -50,9 +51,51 @@ void copy_dir(string source, string receiver, vector<copy_info>* file_list) {
 	closedir(dr);
 }
 
-/*void* file_copy(void* data) {
+void* file_copy(void* data_) {			// Функция копирования файлов
+	pthread_data* data = (pthread_data*) data_;
+	while(1) {
+		pthread_mutex_lock(data->mutex);	// Забираем файл из списка файлов
+		if (data->file_list->empty()){
+			pthread_mutex_unlock(data->mutex);
+			return NULL;
+		}
+		string from = (*data->file_list)[0].from;
+		string to = (*data->file_list)[0].to;
+		data->file_list->erase(data->file_list->begin());
+		pthread_mutex_unlock(data->mutex);
+		
+		struct stat st;
+		if (stat(to.c_str(), &st) != -1) {	// Перименование старого файла
+			string old = to + ".old";
+			rename (to.c_str(), old.c_str());
+		}
 
-}*/
+		stat(from.c_str(), &st);		// Копирование
+		ifstream fin;
+		ofstream fout;
+		fin.open(from, ios_base::in | ios_base::binary);
+		if (!fin.is_open()) {
+			cout << "Couldn't open file: " << from << endl;
+			return NULL;
+		}
+		fout.open(to, ios_base::out | ios_base::binary);
+		if (!fout.is_open()) {
+			cout << "Couldn't create file: " << to << endl;
+			fin.close();
+			return NULL;
+		}
+		int buffer_len = 1024;
+		char buffer[buffer_len];
+		while (!fin.eof()) {
+			fin.read(buffer, buffer_len);
+			if (fin.gcount() > 0)
+				fout.write(buffer, fin.gcount());
+		}
+		cout << from << " -> " << to << " - DONE"  << endl;
+		fin.close();
+		fout.close();
+	}
+}
 
 int main(int argc, char** argv) {
 	if (argc != 4) {			// Банальная проверка правильности ввода команды
@@ -78,11 +121,9 @@ int main(int argc, char** argv) {
 	string source = argv[2];
 	string receiver = argv[3];
 	copy_dir(source, receiver, &file_list);
-	for (int i = 0; i < file_list.size(); i++)
-		cout << file_list[i].from << " -> " << file_list[i].to << endl;
 
 //// Приступаем к копированию файлов
-/*	pthread_data data[thread_number];
+	pthread_data data[thread_number];
 	pthread_mutex_t mutex;
 	pthread_mutex_init(&mutex, NULL);
 	for (int i = 0; i < thread_number; i++) {
@@ -93,8 +134,8 @@ int main(int argc, char** argv) {
 	for (int i = 0; i < thread_number; i++) {
 		pthread_create(&threads[i], NULL, file_copy, &data[i]);
 	}
-	for (int i = 0; i < 5; i++) {
+	for (int i = 0; i < thread_number; i++) {
 		pthread_join(threads[i], NULL);
-	}*/
+	}
 	return 0;
 }
