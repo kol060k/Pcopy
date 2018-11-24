@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <utime.h>
 
 using namespace std;
 
@@ -20,6 +21,7 @@ struct copy_info {
 struct pthread_data {
 	pthread_mutex_t* mutex;
 	vector<copy_info>* file_list;
+	int me;
 };
 
 void copy_dir(string source, string receiver, vector<copy_info>* file_list) {
@@ -70,8 +72,7 @@ void* file_copy(void* data_) {			// Функция копирования фай
 			rename (to.c_str(), old.c_str());
 		}
 
-		stat(from.c_str(), &st);		// Копирование
-		ifstream fin;
+		ifstream fin;				// Копирование
 		ofstream fout;
 		fin.open(from, ios_base::in | ios_base::binary);
 		if (!fin.is_open()) {
@@ -91,7 +92,13 @@ void* file_copy(void* data_) {			// Функция копирования фай
 			if (fin.gcount() > 0)
 				fout.write(buffer, fin.gcount());
 		}
-		cout << from << " -> " << to << " - DONE"  << endl;
+		stat(from.c_str(), &st);
+		chmod(to.c_str(), st.st_mode);
+		struct utimbuf new_time;
+		new_time.modtime = st.st_mtime;
+		new_time.actime = st.st_atime;
+		utime(to.c_str(), &new_time);
+		cout << from << " -> " << to << " - DONE" << " by " << data->me << endl;
 		fin.close();
 		fout.close();
 	}
@@ -129,6 +136,7 @@ int main(int argc, char** argv) {
 	for (int i = 0; i < thread_number; i++) {
 		data[i].file_list = &file_list;
 		data[i].mutex = &mutex;
+		data[i].me = i;
 	}
 	pthread_t threads[thread_number];
 	for (int i = 0; i < thread_number; i++) {
