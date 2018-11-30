@@ -8,8 +8,8 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include <fstream>
 #include <utime.h>
+#include <fcntl.h>
 
 using namespace std;
 
@@ -71,36 +71,32 @@ void* file_copy(void* data_) {			// Функция копирования фай
 			string old = to + ".old";
 			rename (to.c_str(), old.c_str());
 		}
-
-		ifstream fin;				// Копирование
-		ofstream fout;
-		fin.open(from, ios_base::in | ios_base::binary);
-		if (!fin.is_open()) {
-			cout << "Couldn't open file: " << from << endl;
-			return NULL;
-		}
-		fout.open(to, ios_base::out | ios_base::binary);
-		if (!fout.is_open()) {
-			cout << "Couldn't create file: " << to << endl;
-			fin.close();
-			return NULL;
-		}
-		int buffer_len = 1024;
-		char buffer[buffer_len];
-		while (!fin.eof()) {
-			fin.read(buffer, buffer_len);
-			if (fin.gcount() > 0)
-				fout.write(buffer, fin.gcount());
-		}
 		stat(from.c_str(), &st);
-		chmod(to.c_str(), st.st_mode);
+
+		int fin = open(from.c_str(), O_RDONLY);		// Копирование
+		if (fin < 0) {
+			perror(from.c_str());
+			return NULL;
+		}
+		int fout = open(to.c_str(), O_WRONLY | O_CREAT, st.st_mode);
+		if (fout < 0) {
+			perror(to.c_str());
+			close(fin);
+			return NULL;
+		}
+		int buffer_len = 65536;
+		char buffer[buffer_len];
+		int rd;
+		while ((rd = read(fin, buffer, buffer_len)) > 0) {
+			write(fout, buffer, rd);
+		}
+		close(fin);
+		close(fout);
 		struct utimbuf new_time;
 		new_time.modtime = st.st_mtime;
 		new_time.actime = st.st_atime;
 		utime(to.c_str(), &new_time);
 		cout << from << " -> " << to << " - DONE" << " by " << data->me << endl;
-		fin.close();
-		fout.close();
 	}
 }
 
